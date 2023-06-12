@@ -9,8 +9,8 @@ from time import sleep
 I2C1_SDA_PIN = 14
 I2C1_SCL_PIN = 15
 # Initalisatie en declaratie van BME680-sensor
-i2c1=machine.I2C(1,sda=machine.Pin(I2C1_SDA_PIN), scl=machine.Pin(I2C1_SCL_PIN), freq=400000)
-bme = BME680_I2C(i2c1)
+I2C1=machine.I2C(1,sda=machine.Pin(I2C1_SDA_PIN), scl=machine.Pin(I2C1_SCL_PIN), freq=400000)
+bme = BME680_I2C(I2C1)
 time.sleep(1)
 # Data dict
 measurement = {
@@ -25,9 +25,9 @@ led = Pin("LED", Pin.OUT)
 
 # Bijstellen -----------------------------------------------------------------------------------
 # Normale luchtdruk locatie (hPa) op NAP
-sealevelpressure = 1013.25
+sealevelpressure = 1015.2
 # Deze variable wordt gebruikt ter correctie vd offset van de temperatuur. 
-temperature_offset = -2
+temperature_offset = -1
 
 # Code -----------------------------------------------------------------------------------------
 def measureClimate():
@@ -36,14 +36,22 @@ def measureClimate():
     if 'sealevelpressure' in locals():
         bme.sea_level_pressure = sealevelpressure
     # Sla de waarde die gemeten is op in de dictonairy
+    measurement["air_quality"] = calculateIAQ(bme.gas)
     measurement["temperature"] = bme.temperature
     measurement["humidity"] = bme.humidity
     measurement["pressure"] = bme.pressure
-    # measurement["air_quality"] = bme.air
     measurement["gas"] = bme.gas
     led.value(0)
 
-
+def calculateIAQ(gas):
+    # Calculate the air_quality_score using temperature, humidity, and gas_resistance
+    air_quality_score = 100 - (gas / 300)
+    # Limit the air_quality_score to the range [0, 100]
+    air_quality_score = min(max(air_quality_score, 0), 100)
+    print(air_quality_score)
+    return air_quality_score
+    
+    
 while True:
     measureClimate()  
     print(measurement)
