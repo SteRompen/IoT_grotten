@@ -1,0 +1,110 @@
+import bluetooth
+import ble
+import machine
+import ubinascii
+from ble_advertising import advertising_payload
+from micropython import const
+import time
+
+led = machine.Pin('LED', machine.Pin.OUT) 
+
+_ADV_TYPE_FLAGS = const(0x01)
+_ADV_TYPE_NAME = const(0x09)
+
+def advertising_payload(name=None):
+    #creates a empty bytearray object named payload -> will store the payload
+    payload = bytearray()
+
+    #helper functie to add information to the payload. adv_type: an integer representing #the advertising data type
+    #and value, the data to be appended
+    def _append(adv_type, value):
+        nonlocal payload
+        payload += bytes([len(value) + 1, adv_type]) + value
+
+    _append(_ADV_TYPE_FLAGS, b"\x06")  # General Discoverable Mode
+    _append(_ADV_TYPE_NAME, name.encode())
+
+    return payload
+
+# Event codes
+_IRQ_CENTRAL_CONNECT = const(1)
+_IRQ_CENTRAL_DISCONNECT = const(2)
+_IRQ_SCAN_RESULT = const(5)
+_IRQ_SCAN_DONE = const(6)
+
+# Event handler for the connected event
+def handle_connected_event(event, data):
+    if event == _IRQ_CENTRAL_CONNECT:
+        conn_handle, addr_type, addr = data
+        print("Device connected:", ubinascii.hexlify(addr))
+            # Perform actions when a central device connects, such as sending data
+            # You can use the data_characteristic and ble.gatts_notify() to send data
+    elif event == _IRQ_CENTRAL_DISCONNECT:
+         conn_handle, addr_type, addr = data
+         print("Device disconnected:", ubinascii.hexlify(addr))
+
+def handle_scan_result_event(event, data):
+    led.on()
+    if event == _IRQ_SCAN_RESULT:
+        addr_type, addr, adv_type, rssi, adv_data = data
+        print("Device found:")
+        print("Address:", ubinascii.hexlify(addr).decode())
+        print("RSSI:", rssi)
+        print("Advertising data:", adv_data)
+        
+        # Check if device name is present in the advertising data
+        for (ad_type, ad_value) in adv_data:
+            if ad_type == _ADV_TYPE_NAME:
+                device_name = ad_value.decode()
+                print("Device Name:", device_name)
+                break
+
+# Event handler for the scan done event
+def handle_scan_done_event(event, data):
+    if event == _IRQ_SCAN_DONE:
+        print("Scanning finished")
+        
+def print_options():
+    print("Options:")
+    print("1. Scan for devices")
+    print("2. Connect to a device")
+    print("3. advertising pico")
+
+def main():
+    ble = bluetooth.BLE()
+    ble.active(True)
+    print_options()
+    
+    
+    # Register the event handler for the connected event arg
+    ble.irq(handle_connected_event)
+    ble.irq(handle_scan_result_event)
+    ble.irq(handle_scan_done_event)
+    
+    while True:
+        option = input("Select an option: ")
+        
+        if option == "1":
+            # Start scanning for devices
+            ble.gap_scan(25000,True)  # Scan for 10 seconds
+            print("Scanning for devices...")
+            time.sleep(30)
+        elif option == "2":
+            address = input("Enter the device address to connect: ")
+            ble.gap_connect(ble.ADDR_TYPE_PUBLIC, ubinascii.unhexlify(address))
+            print("Connecting to device...")
+        elif option == "3":
+            # Generate the advertising payload with the desired device name
+            adv_payload = advertising_payload(name="PicoPeripheral")
+
+            # Start advertising the peripheral
+            ble.gap_advertise(100, adv_payload, connectable=True)  # 100ms interval
+            print("Peripheral advertising...")
+            
+        else:
+            print("Invalid option. Please try again.")
+    
+    
+
+if __name__ == "__main__":
+    main()
