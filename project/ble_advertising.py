@@ -1,6 +1,13 @@
+# Helpers for generating BLE advertising payloads.
+
 from micropython import const
 import struct
 import bluetooth
+
+# Advertising payloads are repeated packets of the following form:
+#   1 byte data length (N + 1)
+#   1 byte type (see constants below)
+#   N bytes type-specific data
 
 _ADV_TYPE_FLAGS = const(0x01)
 _ADV_TYPE_NAME = const(0x09)
@@ -12,6 +19,8 @@ _ADV_TYPE_UUID32_MORE = const(0x4)
 _ADV_TYPE_UUID128_MORE = const(0x6)
 _ADV_TYPE_APPEARANCE = const(0x19)
 
+
+# Generate a payload to be passed to gap_advertise(adv_data=...).
 def advertising_payload(limited_disc=False, br_edr=False, name=None, services=None, appearance=0):
     payload = bytearray()
 
@@ -37,6 +46,7 @@ def advertising_payload(limited_disc=False, br_edr=False, name=None, services=No
             elif len(b) == 16:
                 _append(_ADV_TYPE_UUID128_COMPLETE, b)
 
+    # See org.bluetooth.characteristic.gap.appearance.xml
     if appearance:
         _append(_ADV_TYPE_APPEARANCE, struct.pack("<h", appearance))
 
@@ -48,7 +58,7 @@ def decode_field(payload, adv_type):
     result = []
     while i + 1 < len(payload):
         if payload[i + 1] == adv_type:
-            result.append(payload[i + 2: i + payload[i] + 1])
+            result.append(payload[i + 2 : i + payload[i] + 1])
         i += 1 + payload[i]
     return result
 
@@ -61,9 +71,9 @@ def decode_name(payload):
 def decode_services(payload):
     services = []
     for u in decode_field(payload, _ADV_TYPE_UUID16_COMPLETE):
-        services.append(bluetooth.UUID(struct.unpack("<h", u)[0], 0))
+        services.append(bluetooth.UUID(struct.unpack("<h", u)[0]))
     for u in decode_field(payload, _ADV_TYPE_UUID32_COMPLETE):
-        services.append(bluetooth.UUID(struct.unpack("<I", u)[0], 0))
+        services.append(bluetooth.UUID(struct.unpack("<d", u)[0]))
     for u in decode_field(payload, _ADV_TYPE_UUID128_COMPLETE):
         services.append(bluetooth.UUID(u))
     return services
